@@ -1,0 +1,34 @@
+beforeOptimizing为精度高且部分优化的代码，afterOptimizing为进一步优化后的代码；优化后精度有一些损失，但损失不大。
+自行下载postgresql-10.4包之后，放于Home目录下，将funcapi.c文件替换为以上提到的二者之一，并将以上提到的文件改名为funcapi.c；将similarity_data.sql放在postgresql-10.4目录下，并在pg_proc.h文件中按照下面的提示加入代码，然后进行操作。
+
+10.4版本中，在pg_proc.h中加入的代码如下：
+DATA(insert OID = 4375 ( levenshtein_distance PGNSP PGUID 12 1 0 0 0 f f f f t f i s 2 0 20 "25 25" _null_ _null_ _null_ _null_ _null_ levenshtein_distance _null_ _null_ _null_ ));
+DESCR("levenshtein_distance");
+DATA(insert OID = 4376 ( jaccard_index PGNSP PGUID 12 1 0 0 0 f f f f t f i s 2 0 700 "25 25" _null_ _null_ _null_ _null_ _null_ jaccard_index _null_ _null_ _null_ ));
+DESCR("jaccard index ");
+
+每次修改完代码过后，需要先删去Home下的pgsql文件夹，make clean后敲以下代码（第一次装环境时也需要）
+//注意将qiaowenyang改成自己虚拟机的名字
+./configure --enable-depend --enable-cassert --without-zlib --enable-debug CFLAGS="-O0" --prefix=$HOME/pgsql
+make
+make install
+$HOME/pgsql/bin/initdb -D $HOME/pgsql/data --locale=C
+/home/qiaowenyang/pgsql/bin/pg_ctl -D /home/qiaowenyang/pgsql/data -l logfile start
+$HOME/pgsql/bin/psql -p 5432 postgres -c 'CREATE DATABASE similarity;'
+/*以下这一步用来载入数据集*/
+$HOME/pgsql/bin/psql -p 5432 -d similarity -f /home/qiaowenyang/postgresql-10.4/similarity_data.sql
+$HOME/pgsql/bin/psql similarity
+/*每次跑完代码，都需要敲入如下代码来stop，不然5432端口会被占用*/
+/home/qiaowenyang/pgsql/bin/pg_ctl -D /home/qiaowenyang/pgsql/data stop
+
+/*简单测试*/
+select levenshtein_distance('sunday', 'saturday');
+select jaccard_index('sunday', 'saturday');
+
+/*测试代码正确性*/
+select count(*) from restaurantphone rp, addressphone ap where levenshtein_distance(rp.phone, ap.phone) < 4;
+select count(*) from restaurantaddress ra, restaurantphone rp where levenshtein_distance(ra.name, rp.name) < 3;
+select count(*) from restaurantaddress ra, addressphone ap where levenshtein_distance(ra.address, ap.address) < 4;
+select count(*) from restaurantphone rp, addressphone ap where jaccard_index(rp.phone, ap.phone) > 0.6;
+select count(*) from restaurantaddress ra, restaurantphone rp where jaccard_index(ra.name, rp.name) > 0.65;
+select count(*) from restaurantaddress ra, addressphone ap where jaccard_index(ra.address, ap.address) > 0.8;
